@@ -50,6 +50,7 @@ func GetOEMsByURL(url string) (c chan model.ModelItem) {
 				c <- model.ModelItem{
 					Oem:   strings.ToUpper(x),
 					Model: x2.Name,
+					Total: x2.Count,
 				}
 			}
 		}

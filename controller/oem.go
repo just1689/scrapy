@@ -27,11 +27,13 @@ func GetOEMs() {
 
 		id := row.Oem + "." + row.Model
 		id = strings.ReplaceAll(id, " ", "")
+		id = tools.HashString(id)
 		outModel <- remote.PutItem{
 			Item: tools.StructToIOBody(model.ModelItem{
 				ID:    id,
 				Oem:   row.Oem,
 				Model: row.Model,
+				Total: row.Total,
 			}),
 			URL: (model.DBUrlModel + "?id=eq." + id),
 		}

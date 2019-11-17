@@ -15,10 +15,15 @@ import (
 	"sync"
 )
 
+var start = `aHR0cHM6Ly93d3cuY2Fycy5jby56YS9zZWFyY2hWZWhpY2xlLnBocD9uZXdfb3JfdXNlZD0mbWFrZV9tb2RlbD0=`
+var afterMake = `JTVC`
+var afterModel = `JTVEJnZmc19hcmVhPSZhZ2VudF9sb2NhbGl0eT0mcHJpY2VfcmFuZ2U9Jm9zPSZsb2NhbGl0eT0mYm9keV90eXBlX2V4YWN0PSZ0cmFuc21pc3Npb249JmZ1ZWxfdHlwZT0mbG9naW5fdHlwZT0mbWFwcGVkX2NvbG91cj0mdmZzX3llYXI9JnZmc19taWxlYWdlPSZ2ZWhpY2xlX2F4bGVfY29uZmlnPSZrZXl3b3JkPSZzb3J0PXZmc19wcmljZQ==`
+
 var search = `<div class="resultsnum pagination__page-number pagination__page-number_right">`
 var search2 = `of`
 var search3 = `</div>`
 var diff = len(search)
+var search4 = `vehicle-list__center-block"><a href="/`
 
 func ModelSearch() {
 	resp, err := http.Get(model.DBUrlModel)
@@ -34,6 +39,7 @@ func ModelSearch() {
 	}
 
 	arr := make([]model.ModelItem, 0)
+
 	err = json.Unmarshal(b, &arr)
 	if err != nil {
 		logrus.Errorln(err)
@@ -42,23 +48,34 @@ func ModelSearch() {
 
 	c := make(chan model.ListingItem)
 
-	//Writes model.ListingItem s until the channel is closed
 	wgWriter := sync.WaitGroup{}
-	go func() {
-		wgWriter.Add(1)
-		putterChan := make(chan remote.PutItem)
-		remote.StartPutter(putterChan, true)
-		for row := range c {
-			fmt.Println("writing!")
-			putterChan <- remote.PutItem{
-				Item: tools.StructToIOBody(row),
-				URL:  model.DBUrlListing + "?id=eq." + row.ID,
+	for i := 0; i < 10; i++ {
+		//Writes model.ListingItem s until the channel is closed
+		go func() {
+			wgWriter.Add(1)
+			putterChan := make(chan remote.PutItem)
+			remote.StartPutter(putterChan, true)
+			for row := range c {
+				fmt.Println("writing!")
+				putterChan <- remote.PutItem{
+					Item: tools.StructToIOBody(row),
+					URL:  model.DBUrlListing + "?id=eq." + row.ID,
+				}
 			}
-		}
-		wgWriter.Done()
-	}()
+			wgWriter.Done()
+		}()
+	}
 
 	//Finds every model.ListingItem for a ...&P=n for 1..count
+	arrChan := arrToChan(arr)
+	for i := 0; i < 10; i++ {
+		go func() {
+			for row := range arrChan {
+				count := ModelSearchSpecific(row.Oem, row.Model)
+				GetPages(row.Oem, row.Model, count, c)
+			}
+		}()
+	}
 	for _, row := range arr {
 		count := ModelSearchSpecific(row.Oem, row.Model)
 		GetPages(row.Oem, row.Model, count, c)
@@ -69,11 +86,19 @@ func ModelSearch() {
 	wgWriter.Wait()
 }
 
+func arrToChan(arr []model.ModelItem) chan model.ModelItem {
+	c := make(chan model.ModelItem)
+	go func() {
+		for _, i := range arr {
+			c <- i
+		}
+		close(c)
+	}()
+	return c
+}
+
 func ModelSearchSpecific(oem, model string) (pages int) {
 
-	start := `aHR0cHM6Ly93d3cuY2Fycy5jby56YS9zZWFyY2hWZWhpY2xlLnBocD9uZXdfb3JfdXNlZD0mbWFrZV9tb2RlbD0=`
-	afterMake := `JTVC`
-	afterModel := `JTVEJnZmc19hcmVhPSZhZ2VudF9sb2NhbGl0eT0mcHJpY2VfcmFuZ2U9Jm9zPSZsb2NhbGl0eT0mYm9keV90eXBlX2V4YWN0PSZ0cmFuc21pc3Npb249JmZ1ZWxfdHlwZT0mbG9naW5fdHlwZT0mbWFwcGVkX2NvbG91cj0mdmZzX3llYXI9JnZmc19taWxlYWdlPSZ2ZWhpY2xlX2F4bGVfY29uZmlnPSZrZXl3b3JkPSZzb3J0PXZmc19wcmljZQ==`
 	url := tools.Base64ToStr(start) + oem + tools.Base64ToStr(afterMake) + model + tools.Base64ToStr(afterModel)
 
 	resp, err := http.Get(url)
@@ -125,9 +150,6 @@ func GetPages(oem, mdl string, count int, resultOut chan model.ListingItem) {
 	pages = count/20 + 1
 
 	for page := 1; page <= pages; page++ {
-		start := `aHR0cHM6Ly93d3cuY2Fycy5jby56YS9zZWFyY2hWZWhpY2xlLnBocD9uZXdfb3JfdXNlZD0mbWFrZV9tb2RlbD0=`
-		afterMake := `JTVC`
-		afterModel := `JTVEJnZmc19hcmVhPSZhZ2VudF9sb2NhbGl0eT0mcHJpY2VfcmFuZ2U9Jm9zPSZsb2NhbGl0eT0mYm9keV90eXBlX2V4YWN0PSZ0cmFuc21pc3Npb249JmZ1ZWxfdHlwZT0mbG9naW5fdHlwZT0mbWFwcGVkX2NvbG91cj0mdmZzX3llYXI9JnZmc19taWxlYWdlPSZ2ZWhpY2xlX2F4bGVfY29uZmlnPSZrZXl3b3JkPSZzb3J0PXZmc19wcmljZQ==`
 		url := tools.Base64ToStr(start) + url.QueryEscape(oem) + tools.Base64ToStr(afterMake) + url.QueryEscape(mdl) + tools.Base64ToStr(afterModel) + "?P=" + strconv.Itoa(page)
 
 		resp, err := http.Get(url)
@@ -141,15 +163,14 @@ func GetPages(oem, mdl string, count int, resultOut chan model.ListingItem) {
 		s := string(doc)
 		s = strings.ReplaceAll(s, "\r", "")
 		s = strings.ReplaceAll(s, "\n", "")
-		search := `vehicle-list__center-block"><a href="/`
 
 		for n := 1; n <= 20; n++ {
-			i = strings.Index(s, search)
+			i = strings.Index(s, search4)
 			if i == -1 {
 				break
 			}
 			s = s
-			s = s[i+len(search) : len(s)-len(search)]
+			s = s[i+len(search4) : len(s)-len(search4)]
 
 			i = strings.Index(s, `"`)
 			snip := s[:i]
@@ -162,9 +183,6 @@ func GetPages(oem, mdl string, count int, resultOut chan model.ListingItem) {
 			}
 
 			s = s[i:]
-
 		}
-
 	}
-
 }
