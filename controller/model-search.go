@@ -13,6 +13,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 )
 
 var start = `aHR0cHM6Ly93d3cuY2Fycy5jby56YS9zZWFyY2hWZWhpY2xlLnBocD9uZXdfb3JfdXNlZD0mbWFrZV9tb2RlbD0=`
@@ -49,22 +50,26 @@ func ModelSearch() {
 	c := make(chan model.ListingItem)
 
 	wgWriter := sync.WaitGroup{}
-	for i := 0; i < 10; i++ {
+	var saved uint64
+	for i := 0; i < 4; i++ {
 		//Writes model.ListingItem s until the channel is closed
 		go func() {
 			wgWriter.Add(1)
 			putterChan := make(chan remote.PutItem)
 			remote.StartPutter(putterChan, true)
 			for row := range c {
-				fmt.Println("writing!")
 				putterChan <- remote.PutItem{
 					Item: tools.StructToIOBody(row),
 					URL:  model.DBUrlListing + "?id=eq." + row.ID,
 				}
+				atomic.AddUint64(&saved, 1)
+				fmt.Println("saved", saved)
 			}
 			wgWriter.Done()
 		}()
 	}
+
+	var queued uint64
 
 	//Finds every model.ListingItem for a ...&P=n for 1..count
 	arrChan := arrToChan(arr)
@@ -73,13 +78,17 @@ func ModelSearch() {
 			for row := range arrChan {
 				count := ModelSearchSpecific(row.Oem, row.Model)
 				GetPages(row.Oem, row.Model, count, c)
+				atomic.AddUint64(&queued, uint64(count))
+				//fmt.Println("queue", queued)
 			}
 		}()
 	}
 	for _, row := range arr {
 		count := ModelSearchSpecific(row.Oem, row.Model)
 		GetPages(row.Oem, row.Model, count, c)
+		atomic.AddUint64(&queued, uint64(count))
 	}
+	fmt.Println("queue", queued)
 	close(c)
 
 	//Block until the writer is done
