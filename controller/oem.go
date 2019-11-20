@@ -22,7 +22,7 @@ func GetOEMs() {
 	for row := range oems {
 		outOEM <- remote.PutItem{
 			Item: tools.StructToIOBody(model.IDItem{ID: row.Oem}),
-			URL:  (model.DBUrlOEM + "?id=eq." + row.Oem),
+			URL:  model.DBUrlOEM + "?id=eq." + row.Oem,
 		}
 
 		id := row.Oem + "." + row.Model
@@ -35,7 +35,7 @@ func GetOEMs() {
 				Model: row.Model,
 				Total: row.Total,
 			}),
-			URL: (model.DBUrlModel + "?id=eq." + id),
+			URL: model.DBUrlModel + "?id=eq." + id,
 		}
 	}
 	logrus.Infoln("...done")
