@@ -1,6 +1,6 @@
 package model
 
-var Gateway = "http://192.168.88.26:33000/"
+var Gateway = "https://scrape-postgrest.captainjustin.space/"
 var DBUrlOEM = Gateway + "oems"
 var DBUrlModel = Gateway + "models"
 var DBUrlListing = Gateway + "listings"
